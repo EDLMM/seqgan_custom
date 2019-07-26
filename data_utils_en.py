@@ -168,6 +168,6 @@ def load_data( fn = './save/tokenized_data.txt' ):
 
 if __name__ == '__main__':
     data_dir = './save/'
-    files = ['ptb.train.txt']#'fake.csv'
+    files = ['overfit_test_corpus.txt'] #['ptb.train.txt']#'fake.csv'
     converter = DataConverter( )
-    converter.convert( data_dir,files,datatype='ptb')
+    converter.convert( data_dir,files,datatype='ptb',fileout='./save/overfit_test.txt')

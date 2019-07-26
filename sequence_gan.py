@@ -1,3 +1,4 @@
+#-*- coding:utf-8 -*-
 from __future__ import division
 import numpy as np
 import tensorflow as tf
@@ -17,7 +18,7 @@ import matplotlib.pyplot as plt
 ######################################################################################
 EMB_DIM = 32 # embedding dimension
 HIDDEN_DIM = 32 # hidden state dimension of lstm cell
-SEQ_LENGTH = 82 # sequence length, need to set up according to data set before run
+SEQ_LENGTH =6 #82 # sequence length, need to set up according to data set before run
 START_TOKEN = 1
 PRE_EPOCH_NUM = 120 #120 # supervise (maximum likelihood estimation) epochs
 SEED = 88
@@ -27,8 +28,8 @@ BATCH_SIZE = 1 #64
 #  Discriminator  Hyper-parameters
 #########################################################################################
 dis_embedding_dim = 64
-dis_filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20]
-dis_num_filters = [100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160]
+dis_filter_sizes = [1,2,3,4,5,6] #[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20] #最后filter不能比 sequence 长
+dis_num_filters = [100, 200, 200, 200, 200, 100] #[100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160] 这个和上面的对应
 dis_dropout_keep_prob = 0.75
 dis_l2_reg_lambda = 0.2
 dis_batch_size = 64
@@ -120,7 +121,7 @@ def mplt_save(epoch1,loss1,epoch2,loss2,phase_name="MLE pretrain"):
 def main():
     
     print '#########################################################################'
-    print "version for overfit with delayed LOSS plot"
+    print "version for overfit with delayed LOSS plot 3"
     print '#########################################################################'
 
     random.seed(SEED)
