@@ -5,6 +5,7 @@ import pandas as pd
 import nltk
 from nltk.tokenize import sent_tokenize,word_tokenize,RegexpTokenizer
 import string
+import sys
 
 PAD_ID = 0
 GO_ID = 1 
@@ -65,7 +66,16 @@ def get_sent_list(file_path="./dataset/fake.csv",datatype="csv"):
             for line in lines:
                 Row_list.append(word_tokenize_no_punct(line))
             f.close()
-    
+    elif datatype=='snli':
+        print "processing ",file_path
+        snil=pd.read_csv(file_path,engine = "python")
+        mask = [isinstance(item, (str, bytes)) for item in snil['sentence2']]
+        snil=snil.loc[mask]
+        snil['sentence2']=snil['sentence2'].str.lower()
+        df=pd.DataFrame(snil['sentence2'].apply(word_tokenize).rename("WORDS"))
+        for index,rows in df.iterrows():
+            Row_list.append(rows.WORDS)
+
     return Row_list
 
 def pad_data(terms_list , max_len , pad_pre = False):
@@ -168,6 +178,7 @@ def load_data( fn = './save/tokenized_data.txt' ):
 
 if __name__ == '__main__':
     data_dir = './save/'
-    files = ['overfit_test_corpus.txt'] #['ptb.train.txt']#'fake.csv'
+    files = [] #['overfit_test_corpus.txt'] #['ptb.train.txt']#'fake.csv'
     converter = DataConverter( )
-    converter.convert( data_dir,files,datatype='ptb',fileout='./save/overfit_test.txt')
+    files.append(str(sys.argv[1]))
+    converter.convert( data_dir,files,datatype=sys.argv[3],fileout='./save/'+sys.argv[2]) # 'ptb'  fileout= overfit_test.txt (numbers)

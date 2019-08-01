@@ -16,9 +16,9 @@ import matplotlib.pyplot as plt
 #########################################################################################
 #  Generator  Hyper-parameters
 ######################################################################################
-EMB_DIM = 32 # embedding dimension
+EMB_DIM = 50 #32 # embedding dimension
 HIDDEN_DIM = 32 # hidden state dimension of lstm cell
-SEQ_LENGTH =6 #82 # sequence length, need to set up according to data set before run
+SEQ_LENGTH =32 #82 # sequence length, need to set up according to data set before run
 START_TOKEN = 1
 PRE_EPOCH_NUM = 120 #120 # supervise (maximum likelihood estimation) epochs
 SEED = 88
@@ -28,8 +28,8 @@ BATCH_SIZE = 1 #64
 #  Discriminator  Hyper-parameters
 #########################################################################################
 dis_embedding_dim = 64
-dis_filter_sizes = [1,2,3,4,5,6] #[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20] #最后filter不能比 sequence 长
-dis_num_filters = [100, 200, 200, 200, 200, 100] #[100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160] 这个和上面的对应
+dis_filter_sizes =[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 32] # [1,2,3,4,5,6] #[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20] #最后filter不能比 sequence 长
+dis_num_filters =[100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160,160] # [100, 200, 200, 200, 200, 100] #[100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160] 这个和上面的对应
 dis_dropout_keep_prob = 0.75
 dis_l2_reg_lambda = 0.2
 dis_batch_size = 64
@@ -38,7 +38,7 @@ DIS_PRE_EPOCH_NUM=50 #50
 #  Basic Training Parameters
 #########################################################################################
 TOTAL_BATCH = 200 #200
-positive_file =  './save/overfit_test.txt'#'save/tokenized_data.txt'#'save/real_data.txt'
+positive_file =  './save/snli_1.0_test_token.txt'#'save/tokenized_data.txt'#'save/real_data.txt'
 negative_file = './save/generator_sample.txt'
 eval_file = './save/eval_file.txt'
 generated_num = 2 #42068 # should be the same size as the true data
@@ -85,6 +85,8 @@ def pre_train_epoch(sess, trainable_model, data_loader):
         supervised_g_losses.append(g_loss)
 
     return np.mean(supervised_g_losses)
+
+
 # my visualization add-ons
 def index2sent(number_sents,vocab_res):
     sents=[]
@@ -118,10 +120,43 @@ def mplt_save(epoch1,loss1,epoch2,loss2,phase_name="MLE pretrain"):
     plt.savefig(phase_name+" loss.png")
     plt.close()
 
+# load pre-trained embeddings
+def load_embd(filepath_glove = './save/glove.6B.50d.txt'):
+    #Load GLOVE vectors
+    glove_vocab = []
+    glove_embd=[]
+    embedding_dict = {}
+    file = open(filepath_glove,'r',encoding='UTF-8')
+    for line in file.readlines():
+        row = line.strip().split(' ')
+        vocab_word = row[0]
+        glove_vocab.append(vocab_word)
+        embed_vector = [float(i) for i in row[1:]] # convert to list of float
+        embedding_dict[vocab_word]=embed_vector
+    file.close()
+    print 'Loaded GLOVE'
+    # glove_vocab_size = len(glove_vocab)
+    # embedding_dim = len(embed_vector)
+    return glove_vocab, embedding_dict
+
+def get_adapted_embed(embed_vocab,embedding_dict,train_vocab):
+    embeddings_tmp=[]
+
+    for key,value in train_vocab.items():
+        if key in embed_vocab:
+            embeddings_tmp.append(embedding_dict[key])
+        else:
+            rand_num = np.random.uniform(low=-0.2, high=0.2,size=EMB_DIM)
+            embeddings_tmp.append(rand_num)
+
+    embedding = np.asarray(embeddings_tmp)
+
+    return embedding
+
 def main():
     
     print '#########################################################################'
-    print "version for overfit with delayed LOSS plot 3"
+    print "version for TEST snli corpus with pre-trained embd"
     print '#########################################################################'
 
     random.seed(SEED)
@@ -136,7 +171,12 @@ def main():
     # likelihood_data_loader = Gen_Data_loader(BATCH_SIZE) # For testing
     dis_data_loader = Dis_dataloader(BATCH_SIZE)
 
-    generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN)
+    # get pre-trained embeddings for training data
+    glove_vocab, embedding_dict=load_embd()
+    train_embeddings=get_adapted_embed(glove_vocab,embedding_dict,vocab_dict)
+
+    generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN,randomEmb=False)
+    # TODO: 在generator内部加 tree和embedding2index；测试是否真的能把embedding load 到模型里面；discriminator也要load吗?应该要
     # target_params = cPickle.load(open('save/target_params.pkl'))
     # target_lstm = TARGET_LSTM(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN, target_params) # The oracle model
 
@@ -147,6 +187,9 @@ def main():
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
     sess.run(tf.global_variables_initializer())
+
+    # load the pre-trained embeddings into model
+    sess.run(generator.embedding_init,feed_dict={generator.embedding_placeholder: train_embeddings})
 
     # First, use the oracle model to provide the positive examples, which are sampled from the oracle data distribution
     # generate_samples(sess, target_lstm, BATCH_SIZE, 2, positive_file)
@@ -208,7 +251,7 @@ def main():
 
     rollout = ROLLOUT(generator, 0.8)
     
-    mplt_save(p_G_MLE_epoch,p_G_MLE_loss,p_D_MLE_epoch,p_D_MLE_loss,"MLE pre-train")
+    mplt_save(p_G_MLE_epoch,p_G_MLE_loss,p_D_MLE_epoch,p_D_MLE_loss,"MLE pre-train on SNLI_test")
     
     samples=index2sent(generator.generate(sess),vocab_res)
     print "generate samples after pretrain D:"
@@ -276,7 +319,7 @@ def main():
         log.write( "generate samples at NO.{} epoch:".format(total_batch))
         samples_to_log(log,samples)
         if total_batch % 20 == 0 or total_batch==TOTAL_BATCH-1:
-            mplt_save(p_G_AD_epoch,p_G_AD_loss,p_D_AD_epoch,p_D_AD_loss,"Adversarial Training")
+            mplt_save(p_G_AD_epoch,p_G_AD_loss,p_D_AD_epoch,p_D_AD_loss,"Adversarial Training on SNLI_test")
     
     log.close()
 

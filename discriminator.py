@@ -57,7 +57,7 @@ class Discriminator(object):
 
     def __init__(
             self, sequence_length, num_classes, vocab_size,
-            embedding_size, filter_sizes, num_filters, l2_reg_lambda=0.0):
+            embedding_size, filter_sizes, num_filters, l2_reg_lambda=0.0,randomEmbd=True):
         # Placeholders for input, output and dropout
         self.input_x = tf.placeholder(tf.int32, [None, sequence_length], name="input_x")
         self.input_y = tf.placeholder(tf.float32, [None, num_classes], name="input_y")
@@ -73,6 +73,8 @@ class Discriminator(object):
                 self.W = tf.Variable(
                     tf.random_uniform([vocab_size, embedding_size], -1.0, 1.0),
                     name="W")
+                # if not randomEmbd:
+                #     self.embedding_placeholder= tf.placeholder(tf.float32, [vocab_size, embedding_size])
                 self.embedded_chars = tf.nn.embedding_lookup(self.W, self.input_x)
                 self.embedded_chars_expanded = tf.expand_dims(self.embedded_chars, -1)
 
