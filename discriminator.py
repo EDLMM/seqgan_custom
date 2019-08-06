@@ -125,6 +125,9 @@ class Discriminator(object):
                 self.scores = tf.nn.xw_plus_b(self.h_drop, W, b, name="scores")
                 self.ypred_for_auc = tf.nn.softmax(self.scores)
                 self.predictions = tf.argmax(self.scores, 1, name="predictions")
+                
+                self.equality = tf.equal(self.predictions, tf.argmax(self.input_y,1)) # must have same dtype
+                self.accuracy= tf.reduce_mean(tf.cast(self.equality, tf.float32))
 
             # CalculateMean cross-entropy loss
             with tf.name_scope("loss"):

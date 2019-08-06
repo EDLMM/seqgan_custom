@@ -18,6 +18,21 @@ _UNK = "_UNK"
 _START_VOCAB = [_PAD, _GO, _EOS, _UNK]
 # max_vocabulary_size = 10000
 
+# to extract out sentences with same semantic
+def extract_same(labelled_text="./save/sentiment labelled sentences/imdb_labelled.txt",label=1,save_name='imdb_positive_sentences.txt'):
+    with open(labelled_text) as f:
+        lines=f.readlines()
+        positive_lines=[]
+        for i,line in enumerate(lines):
+            temp=line.strip('\n').split('\t')
+            if int(temp[1]) == label:
+                positive_lines.append( temp[0].strip(' '))
+        print positive_lines[:1]
+        print "total number: ",len(positive_lines)
+    with open("./save/"+save_name,'a') as output_f:
+        for pl in positive_lines:
+            output_f.write(pl+'\n')
+
 def word_tokenize_no_punct(raw_str):
     moby_tokens = word_tokenize(raw_str)
     text_no_punct = [t for t in moby_tokens if t not in string.punctuation]
@@ -75,7 +90,20 @@ def get_sent_list(file_path="./dataset/fake.csv",datatype="csv"):
         df=pd.DataFrame(snil['sentence2'].apply(word_tokenize).rename("WORDS"))
         for index,rows in df.iterrows():
             Row_list.append(rows.WORDS)
-
+    elif datatype=="imdb_pos":
+    #https://www.kaggle.com/marklvl/sentiment-labelled-sentences-data-set/kernels
+        file_path="./save/imdb_positive_sentences.txt"
+        Row_list=[]
+        with open(file_path) as f:
+            lines = f.readlines()
+            for line in lines:
+                Row_list.append(nltk.tokenize.word_tokenize(line))
+            f.close()
+        print "tokenize positive imdb sentences"
+    else:
+        print "error data type"
+    
+    print "number of sentences: ", len(Row_list)
     return Row_list
 
 def pad_data(terms_list , max_len , pad_pre = False):
@@ -95,6 +123,7 @@ def pad_data(terms_list , max_len , pad_pre = False):
         else:
             new_terms = terms[-max_len:]
         new_terms_list.append(new_terms)
+    print "padding the data to maximum length ", max_len
     return new_terms_list
 def load_vocab( vocabulary_path):
     vocab_dict = {}

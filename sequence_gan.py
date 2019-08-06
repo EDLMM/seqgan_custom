@@ -12,24 +12,28 @@ import cPickle
 import pprint as pp
 import data_utils_en
 import matplotlib.pyplot as plt
+import codecs
+import sys
+
+IS_RESUME=False
 
 #########################################################################################
 #  Generator  Hyper-parameters
 ######################################################################################
 EMB_DIM = 50 #32 # embedding dimension
 HIDDEN_DIM = 32 # hidden state dimension of lstm cell
-SEQ_LENGTH =32 #82 # sequence length, need to set up according to data set before run
+SEQ_LENGTH =82 #32 #82 # sequence length, need to set up according to data set before run
 START_TOKEN = 1
 PRE_EPOCH_NUM = 120 #120 # supervise (maximum likelihood estimation) epochs
 SEED = 88
-BATCH_SIZE = 1 #64
+BATCH_SIZE = 64 # 2
 
 #########################################################################################
 #  Discriminator  Hyper-parameters
 #########################################################################################
 dis_embedding_dim = 64
-dis_filter_sizes =[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 32] # [1,2,3,4,5,6] #[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20] #最后filter不能比 sequence 长
-dis_num_filters =[100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160,160] # [100, 200, 200, 200, 200, 100] #[100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160] 这个和上面的对应
+dis_filter_sizes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 32, 64] #[1,2,3,4,5,6] #[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20] #最后filter不能比 sequence 长
+dis_num_filters =  [100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160,160,200]# [100, 200, 200, 200, 200, 100]#[100, 200, 200, 200, 200, 100, 100, 100, 100, 100, 160, 160] 这个和上面的对应
 dis_dropout_keep_prob = 0.75
 dis_l2_reg_lambda = 0.2
 dis_batch_size = 64
@@ -38,10 +42,11 @@ DIS_PRE_EPOCH_NUM=50 #50
 #  Basic Training Parameters
 #########################################################################################
 TOTAL_BATCH = 200 #200
-positive_file =  './save/snli_1.0_test_token.txt'#'save/tokenized_data.txt'#'save/real_data.txt'
+positive_file = './save/imdb_pos_tokens.txt' # './save/overfit_test.txt'#'save/tokenized_data.txt'#'save/real_data.txt'
 negative_file = './save/generator_sample.txt'
 eval_file = './save/eval_file.txt'
-generated_num = 2 #42068 # should be the same size as the true data
+chkpt_dir= "./checkpoint/"
+generated_num = 500 # for snli 10000 #2 for overfit #42068 for ptb # should be the same size as the true data
 
 
 def generate_samples(sess, trainable_model, batch_size, generated_num, output_file):
@@ -120,13 +125,24 @@ def mplt_save(epoch1,loss1,epoch2,loss2,phase_name="MLE pretrain"):
     plt.savefig(phase_name+" loss.png")
     plt.close()
 
+def mplt_single(x_axis,y_axis,save_name="some_plotting"):
+    # fig, axs = plt.subplots(1, 1, constrained_layout=True,figsize=(5,6))
+    # fig.suptitle(save_name)
+    plt.plot(x_axis,y_axis,'r-')
+    # axs[0].set_title('Generator '+phase_name+ ' loss')
+    plt.ylabel(save_name)
+    plt.xlabel('epoch')
+
+    plt.savefig(save_name+"_plotting.png")
+    plt.close()
+
 # load pre-trained embeddings
 def load_embd(filepath_glove = './save/glove.6B.50d.txt'):
     #Load GLOVE vectors
     glove_vocab = []
     glove_embd=[]
     embedding_dict = {}
-    file = open(filepath_glove,'r',encoding='UTF-8')
+    file = codecs.open(filepath_glove,'r')#,encoding='UTF-8'
     for line in file.readlines():
         row = line.strip().split(' ')
         vocab_word = row[0]
@@ -146,6 +162,7 @@ def get_adapted_embed(embed_vocab,embedding_dict,train_vocab):
         if key in embed_vocab:
             embeddings_tmp.append(embedding_dict[key])
         else:
+            # if it's not in the pre-trained embeddings, initialize with random floats
             rand_num = np.random.uniform(low=-0.2, high=0.2,size=EMB_DIM)
             embeddings_tmp.append(rand_num)
 
@@ -156,7 +173,7 @@ def get_adapted_embed(embed_vocab,embedding_dict,train_vocab):
 def main():
     
     print '#########################################################################'
-    print "version for TEST snli corpus with pre-trained embd"
+    print "version for IMDB postivie sentences with plot accuracy 64"
     print '#########################################################################'
 
     random.seed(SEED)
@@ -186,8 +203,11 @@ def main():
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     sess = tf.Session(config=config)
-    sess.run(tf.global_variables_initializer())
 
+    # Add ops to save and restore all the variables.
+    saver = tf.train.Saver()
+
+    sess.run(tf.global_variables_initializer())
     # load the pre-trained embeddings into model
     sess.run(generator.embedding_init,feed_dict={generator.embedding_placeholder: train_embeddings})
 
@@ -201,6 +221,7 @@ def main():
     p_G_MLE_epoch=[]
     p_D_MLE_loss=[]
     p_D_MLE_epoch=[]
+    p_D_MLE_accuracy=[]
     print 'Start pre-training...'
     log.write('pre-training...\n')
     for epoch in xrange(PRE_EPOCH_NUM):
@@ -215,8 +236,13 @@ def main():
         if epoch % 10 ==0:
             print "pre-train generator {}, loss: {}".format(epoch,loss)
             log.write("pre-train generator {}, loss: {}".format(epoch,loss))
+            save_path = saver.save(sess, chkpt_dir+"model.ckpt")
+            print("Model saved in path: %s" % save_path)
+
         p_G_MLE_loss.append(loss)
         p_G_MLE_epoch.append(epoch)
+          # Save the variables to disk.
+        
     
     samples=index2sent(generator.generate(sess),vocab_res)
     print "generate samples after pretrain G:"
@@ -230,6 +256,7 @@ def main():
         generate_samples(sess, generator, BATCH_SIZE, generated_num, negative_file)
         dis_data_loader.load_train_data(positive_file, negative_file)
         dloss=[]
+        daccuracy=[]
         for _ in range(3):
             dis_data_loader.reset_pointer()
             for it in xrange(dis_data_loader.num_batch):
@@ -239,18 +266,23 @@ def main():
                     discriminator.input_y: y_batch,
                     discriminator.dropout_keep_prob: dis_dropout_keep_prob
                 }
-                _,eloss = sess.run([discriminator.train_op,discriminator.loss], feed)
+                _,eloss,eacrcy = sess.run([discriminator.train_op,discriminator.loss,discriminator.accuracy], feed)
                 dloss.append(eloss)
+                daccuracy.append(eacrcy)
+        daccuracy=np.mean(daccuracy)
         dloss=np.mean(dloss)
         p_D_MLE_loss.append(dloss)
+        p_D_MLE_accuracy.append(daccuracy)
         p_D_MLE_epoch.append(epoch)
         if epoch % 10 ==0:
             print "pre-train discriminator {}, loss: {}".format(epoch,dloss)
             log.write("pre-train discriminator {}, loss: {}".format(epoch,dloss))
+            save_path = saver.save(sess, chkpt_dir+"model.ckpt")
+            print("Model saved in path: %s" % save_path)
 
 
     rollout = ROLLOUT(generator, 0.8)
-    
+    mplt_single(p_D_MLE_epoch,p_D_MLE_accuracy,"MLE pre-train discriminator accuracy")
     mplt_save(p_G_MLE_epoch,p_G_MLE_loss,p_D_MLE_epoch,p_D_MLE_loss,"MLE pre-train on SNLI_test")
     
     samples=index2sent(generator.generate(sess),vocab_res)
@@ -266,6 +298,8 @@ def main():
     p_G_AD_epoch=[]
     p_D_AD_loss=[]
     p_D_AD_epoch=[]
+
+    p_D_AD_Acurracy=[]
     
     G_AD_EPOCH_NUM=1
     D_AD_EPOCH_NUM=5
@@ -280,7 +314,7 @@ def main():
             gloss.append(egloss)
         gloss=np.mean(gloss)
         p_G_AD_loss.append(gloss)
-        p_G_AD_epoch.append(total_batch*G_AD_EPOCH_NUM+it)
+        p_G_AD_epoch.append(total_batch)
         # Test
         # if total_batch % 5 == 0 or total_batch == TOTAL_BATCH - 1:
         #     generate_samples(sess, generator, BATCH_SIZE, generated_num, eval_file)
@@ -294,10 +328,11 @@ def main():
         rollout.update_params()
 
         # Train the discriminator
+        dloss=[]
+        daccuracy=[]
         for depoch in range(D_AD_EPOCH_NUM):
             generate_samples(sess, generator, BATCH_SIZE, generated_num, negative_file)
             dis_data_loader.load_train_data(positive_file, negative_file)
-            dloss=[]
             for _ in range(3):
                 dis_data_loader.reset_pointer()
                 for it in xrange(dis_data_loader.num_batch):
@@ -307,22 +342,57 @@ def main():
                         discriminator.input_y: y_batch,
                         discriminator.dropout_keep_prob: dis_dropout_keep_prob
                     }
-                    _,eloss = sess.run([discriminator.train_op,discriminator.loss], feed)
+                    _,eloss,eacrcy = sess.run([discriminator.train_op,discriminator.loss,discriminator.accuracy], feed)
                     dloss.append(eloss)
-            dloss=np.mean(dloss)
-            p_D_AD_loss.append(dloss)
-            p_D_AD_epoch.append(total_batch*D_AD_EPOCH_NUM + depoch)
-            
-        samples=index2sent(generator.generate(sess),vocab_res)
-        print "generate samples at NO.{} epoch:".format(total_batch)
-        pp.pprint(samples)
-        log.write( "generate samples at NO.{} epoch:".format(total_batch))
-        samples_to_log(log,samples)
-        if total_batch % 20 == 0 or total_batch==TOTAL_BATCH-1:
+                    daccuracy.append(eacrcy)
+
+        ddloss=np.mean(dloss)
+        ddaccuracy=np.mean(daccuracy)
+        p_D_AD_loss.append(ddloss)
+        p_D_AD_Acurracy.append(ddaccuracy)
+        p_D_AD_epoch.append(total_batch)
+
+        if total_batch % 10 == 0 or total_batch==TOTAL_BATCH-1:
             mplt_save(p_G_AD_epoch,p_G_AD_loss,p_D_AD_epoch,p_D_AD_loss,"Adversarial Training on SNLI_test")
-    
+            mplt_single(p_D_AD_epoch,p_D_AD_Acurracy,"Discriminator_Acurracy");
+            save_path = saver.save(sess, chkpt_dir+"model.ckpt")
+            print("Model saved in path: %s" % save_path)
+            samples=index2sent(generator.generate(sess),vocab_res)
+            print "generate samples at NO.{} epoch:".format(total_batch)
+            pp.pprint(samples)
+            log.write( "generate samples at NO.{} epoch:".format(total_batch))
+            samples_to_log(log,samples)
     log.close()
+
+def gen_test():
+    print '#########################################################################'
+    print 'Restore from trained model and generate sentences'
+    print '#########################################################################'
+
+    vocab_dict, vocab_res = data_utils_en.load_vocab('./save/vocab.txt')
+    vocab_size = len(vocab_dict)
+    # tf.reset_default_graph()
+
+    generator = Generator(vocab_size, BATCH_SIZE, EMB_DIM, HIDDEN_DIM, SEQ_LENGTH, START_TOKEN,randomEmb=False)
+    # discriminator = Discriminator(sequence_length=SEQ_LENGTH, num_classes=2, vocab_size=vocab_size, embedding_size=dis_embedding_dim, 
+                                # filter_sizes=dis_filter_sizes, num_filters=dis_num_filters, l2_reg_lambda=dis_l2_reg_lambda)
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    sess = tf.Session(config=config)
+
+    saver = tf.train.Saver()
+    with tf.Session() as sess:
+        saver.restore(sess,chkpt_dir+"model.ckpt")
+        print("Model restored.")
+        samples=index2sent(generator.generate(sess),vocab_res)
+        print "generate samples from restored model:"
+        pp.pprint(samples)
+
 
 
 if __name__ == '__main__':
-    main()
+    if len(sys.argv)>1 and sys.argv[1] == "gen":
+        gen_test()
+    else:
+        main()
+    

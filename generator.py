@@ -62,7 +62,7 @@ class Generator(object):
             # tf.multinomial: log_pro -> next_token
             next_token = tf.cast(tf.reshape(tf.multinomial(log_prob, 1), [self.batch_size]), tf.int32)
             # g_embeddings.size = vocab_size x emb_dim
-            # next_token.size= batch x 1 
+            # next_token.size= batch x 1
             # tf.nn.embedding_lookup: from g_embeddings select "next_embeddings ([batch,emb_dim])" according to next_token (indexes)
             x_tp1 = tf.nn.embedding_lookup(self.g_embeddings, next_token) 
             gen_o = gen_o.write(i, tf.reduce_sum(tf.multiply(tf.one_hot(next_token, self.num_emb, 1.0, 0.0),
